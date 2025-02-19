@@ -6,8 +6,8 @@ setup(
     author='Lingjiao Chen, Matei Zaharia, and James Zou',
     author_email='lingjiao@stanford.edu',
     description='The FrugalGPT library',
-    packages=find_packages(where="src"),  # Recherche les packages sous src
-    package_dir={"": "src"},  # Déclare que le code source est dans le répertoire 'src'
+    packages=find_packages(where="src"),  # Search for packages under src
+    package_dir={"": "src"},  # Declares that the source code is in the 'src' directory
     install_requires=[
         'numpy',
         'cohere',
