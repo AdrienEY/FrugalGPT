@@ -131,7 +131,8 @@ def normalize_answer(s,normal_method=""):
         return ''.join(ch for ch in text if ch not in exclude)
 
     def lower(text):
-#        print("text is:",text)
+        if text is None:
+            return ""  # or raise an appropriate error
         return text.lower()
 
     def mc_remove(text):

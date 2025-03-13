@@ -4,18 +4,24 @@ import time
 import pickle
 import cohere
 import json
-from .utils import compute_cost
+from service.utils import compute_cost
 import os
 import anthropic
 #from transformers import CodeGenTokenizerFast
 #tokenizer_FFAI = CodeGenTokenizerFast.from_pretrained("Salesforce/codegen-350M-mono")
 from transformers import GPT2Tokenizer
+from azure.ai.inference import ChatCompletionsClient
+from azure.core.credentials import AzureKeyCredential
 
 from ai21 import AI21Client
-from ai21.models.chat import ChatMessage, ResponseFormat, DocumentSchema, FunctionToolDefinition, ToolDefinition, ToolParameters
+from ai21.models.chat import ChatMessage, ResponseFormat # DocumentSchema, FunctionToolDefinition, ToolDefinition, ToolParameters
 import google.generativeai as genai
 
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+import base64
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
+from openai import AzureOpenAI
+import logging
+#genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
 
 tokenizer_FFAI = GPT2Tokenizer.from_pretrained("gpt2")
@@ -58,9 +64,13 @@ class ModelService:
         """        
         raise NotImplementedError
 
+from pathlib import Path
+
 class APIModelProvider(ModelService):
     """Provider that calculates conditional logprobs through a REST API"""
-    _CONFIG = json.load(open("config/serviceinfo.json"))
+    # Use absolute path resolution
+    _CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "serviceinfo.json"
+    _CONFIG = json.load(open(_CONFIG_PATH))
     def getcompletion(self,
                       context,
                       use_save=False,
@@ -683,20 +693,451 @@ class TogetherAIModelProvider(APIModelProvider):
         tk1 = completion['raw'].get('usage', {}).get('prompt_tokens', 0)
         tk2 = completion['raw'].get('usage', {}).get('completion_tokens', 0)
         return tk1, tk2
+    
+
+class AzureLlamaModelProvider(APIModelProvider):
+    _ENDPOINT = os.environ.get("LLAMA_ENDPOINT", "https://your-llama-model-endpoint")
+    _API_KEY = os.environ.get("LLAMA_API_KEY", None)
+    _NAME = "azure_llama"
+    
+    def __init__(self, model):
+        self._model = model
+        assert self._API_KEY is not None, "Please set AZURE_INFERENCE_CREDENTIAL env var for running through Azure AI"
+        self.client = ChatCompletionsClient(
+            endpoint=self._ENDPOINT,
+            credential=AzureKeyCredential(self._API_KEY)
+        )
+
+    def _request_format(self, context, genparams):
+        payload = {
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant"
+                },
+                {
+                    "role": "user",
+                    "content": context
+                }
+            ],
+            "max_tokens": genparams.max_tokens,
+            "temperature": genparams.temperature,
+            "top_p": 1.0,
+            "stop": genparams.stop
+        }
+        return payload
+
+    def _response_format(self, response):
+        result = dict()
+        result['raw'] = response
+        result["completion"] = response.choices[0].message.content
+        return result
+
+    def _get_io_tokens(self, context, completion):
+        tk1 = completion['raw'].usage.prompt_tokens
+        tk2 = completion['raw'].usage.completion_tokens
+        return tk1, tk2
+
+    def _api_call(self, endpoint, data, api_key, retries=10, retry_grace_time=10):
+        for _ in range(retries):
+            try:
+                response = self.client.complete(data)
+                return response
+            except Exception as e:
+                print(f"Failed to call API: {e}, retrying...")
+                time.sleep(retry_grace_time)
+        raise TimeoutError(f"API request failed {retries} times, giving up!")
+    
+
+
+
+class AzureCohereModelProvider(APIModelProvider):
+    _ENDPOINT = os.environ.get("COHERE_STUDIO_ENDPOINT", "https://cohere-command-r-fzcrf.eastus.models.ai.azure.com")
+    _API_KEY = os.environ.get("COHERE_STUDIO_API_KEY", None)
+    _NAME = "azure_cohere"
+    
+    def __init__(self, model):
+        self._model = model
+        assert self._API_KEY is not None, "Please set AZURE_INFERENCE_CREDENTIAL env var for running through Azure AI"
+        self.client = ChatCompletionsClient(
+            endpoint=self._ENDPOINT,
+            credential=AzureKeyCredential(self._API_KEY)
+        )
+
+    def _request_format(self, context, genparams):
+        payload = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": context
+                }
+            ],
+            "max_tokens": genparams.max_tokens,
+            "temperature": genparams.temperature,
+            "top_p": 1.0,
+            "frequency_penalty": 0,
+            "presence_penalty": 0,
+            "stop": genparams.stop
+        }
+        return payload
+
+    def _response_format(self, response):
+        result = dict()
+        result['raw'] = response
+        result["completion"] = response.choices[0].message.content
+        return result
+
+    def _get_io_tokens(self, context, completion):
+        tk1 = completion['raw'].usage.prompt_tokens
+        tk2 = completion['raw'].usage.completion_tokens
+        return tk1, tk2
+
+    def _api_call(self, endpoint, data, api_key, retries=10, retry_grace_time=10):
+        for _ in range(retries):
+            try:
+                response = self.client.complete(data)
+                return response
+            except Exception as e:
+                print(f"Failed to call API: {e}, retrying...")
+                time.sleep(retry_grace_time)
+        raise TimeoutError(f"API request failed {retries} times, giving up!")
+    
+
+class AzureMistralNemoModelProvider(APIModelProvider):
+    _ENDPOINT = os.environ.get("MISTRAL_NEMO_ENDPOINT", "https://Mistral-Nemo-maamt.eastus.models.ai.azure.com")
+    _API_KEY = os.environ.get("MISTRAL_NEMO_API_KEY", None)
+    _NAME = "azure_mistral_nemo"
+    
+    def __init__(self, model):
+        self._model = model
+        assert self._API_KEY is not None, "Please set AZURE_INFERENCE_CREDENTIAL env var for running through Azure AI"
+        self.client = ChatCompletionsClient(
+            endpoint=self._ENDPOINT,
+            credential=AzureKeyCredential(self._API_KEY)
+        )
+
+    def _request_format(self, context, genparams):
+        payload = {
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant"
+                },
+                {
+                    "role": "user",
+                    "content": context
+                }
+            ],
+            "max_tokens": genparams.max_tokens,
+            "temperature": genparams.temperature,
+            "top_p": 1.0,
+            "stop": genparams.stop
+        }
+        return payload
+
+    def _response_format(self, response):
+        result = dict()
+        result['raw'] = response
+        result["completion"] = response.choices[0].message.content
+        return result
+
+    def _get_io_tokens(self, context, completion):
+        tk1 = completion['raw'].usage.prompt_tokens
+        tk2 = completion['raw'].usage.completion_tokens
+        return tk1, tk2
+
+    def _api_call(self, endpoint, data, api_key, retries=10, retry_grace_time=10):
+        for _ in range(retries):
+            try:
+                response = self.client.complete(data)
+                return response
+            except Exception as e:
+                print(f"Failed to call API: {e}, retrying...")
+                time.sleep(retry_grace_time)
+        raise TimeoutError(f"API request failed {retries} times, giving up!")
+
+
+
+class AzureMinistralModelProvider(APIModelProvider):
+    _ENDPOINT = os.environ.get("MINISTRAL_ENDPOINT", "https://Ministral-3B-topie.eastus.models.ai.azure.com")
+    _API_KEY = os.environ.get("MINISTRAL_API_KEY", None)
+    _NAME = "azure_ministral"
+    
+    def __init__(self, model):
+        self._model = model
+        assert self._API_KEY is not None, "Please set AZURE_INFERENCE_CREDENTIAL env var for running through Azure AI"
+        logging.info(f"Connecting to endpoint: {self._ENDPOINT}")
+        self.client = ChatCompletionsClient(
+            endpoint=self._ENDPOINT,
+            credential=AzureKeyCredential(self._API_KEY)
+        )
+
+    def _request_format(self, context, genparams):
+        payload = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": context
+                }
+            ],
+            "max_tokens": genparams.max_tokens,
+            "temperature": genparams.temperature,
+            "top_p": 1.0,
+            "frequency_penalty": 0,
+            "presence_penalty": 0,
+            "stop": genparams.stop
+        }
+        return payload
+
+    def _response_format(self, response):
+        result = dict()
+        result['raw'] = response
+        result["completion"] = response.choices[0].message.content
+        return result
+
+    def _get_io_tokens(self, context, completion):
+        tk1 = completion['raw'].usage.prompt_tokens
+        tk2 = completion['raw'].usage.completion_tokens
+        return tk1, tk2
+
+    def _api_call(self, endpoint, data, api_key, retries=10, retry_grace_time=10):
+        for _ in range(retries):
+            try:
+                response = self.client.complete(data)
+                return response
+            except Exception as e:
+                time.sleep(retry_grace_time)
+        raise TimeoutError(f"API request failed {retries} times, giving up!")
+    
+
+class AzureOpenAIModelProvider(APIModelProvider):
+    _ENDPOINT = os.environ.get("OPENAI_ENDPOINT", "https://cognitiveservices.openai.azure.com/")
+    _DEPLOYMENT_NAME = os.environ.get("DEPLOYMENT_NAME", "chat")
+    _API_KEY = os.environ.get("OPENAI_API_KEY", None)
+    _NAME = "azure_openai"
+    
+    def __init__(self, model):
+        self._model = model
+        self.token_provider = get_bearer_token_provider(
+            DefaultAzureCredential(),
+            "https://cognitiveservices.azure.com/.default"
+        )
+
+        self.client = AzureOpenAI(
+            azure_endpoint=self._ENDPOINT,
+            azure_ad_token_provider=self.token_provider,
+            api_version="2024-05-01-preview",
+        )
+        
+    
+    def _request_format(self, context, genparams):
+        chat_prompt = [
+            {
+                "role": "system",
+                "content": "You are an AI assistant that helps people find information."
+            },
+            {
+                "role": "user",
+                "content": context
+            }
+        ]
+
+        return chat_prompt
+
+    def _response_format(self, response):
+        result = dict()
+        result['raw'] = response
+        result["completion"] = response.choices[0].message.content
+        return result
+
+    def _api_call(self, endpoint, data, api_key, retries=10, retry_grace_time=10):
+        for _ in range(retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self._DEPLOYMENT_NAME,
+                    messages=data,
+                    max_tokens=2000, #self.genparams.max_tokens
+                    temperature=0.7, #self.genparams.max_tokens
+                    top_p=0.95,
+                    frequency_penalty=0,
+                    presence_penalty=0,
+                    stop=None,
+                    stream=False
+                )
+                return response
+            except Exception as e:
+                print(f"Failed to call API: {e}, retrying...")
+                time.sleep(retry_grace_time)
+        raise TimeoutError(f"API request failed {retries} times, giving up!")
+    
+    def _get_io_tokens(self, context, completion):
+        usage = completion['raw'].usage
+        tk1 = usage.prompt_tokens
+        tk2 = usage.completion_tokens
+        return tk1, tk2
+    
+
+class AzureGPT4oModelProvider(APIModelProvider):
+    _ENDPOINT = os.environ.get("OPENAI_4o_ENDPOINT", "https://azure-openai-dev-001.openai.azure.com/")
+    _DEPLOYMENT_NAME = os.environ.get("DEPLOYMENT_NAME", "gpt-4o")
+    _API_KEY = os.environ.get("OPENAI_4o_API_KEY", None)
+    _NAME = "azure_gpt4o"
+
+    def __init__(self, model):
+        self._model = model
+        self.client = AzureOpenAI(
+            api_version="2024-12-01-preview",
+            azure_endpoint=self._ENDPOINT,
+            api_key=self._API_KEY,
+        )
+
+    def _request_format(self, context, genparams):
+        chat_prompt = [
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "You are an AI assistant that helps people find information."
+                    }
+                ]
+            },
+            {
+                "role": "user",
+                "content": context
+            }
+        ]
+        return chat_prompt
+
+    def _response_format(self, response):
+        result = dict()
+        result['raw'] = response
+        result["completion"] = response.choices[0].message.content
+        return result
+
+    def _get_io_tokens(self, context, completion):
+        usage = completion['raw'].usage
+        tk1 = usage.prompt_tokens
+        tk2 = usage.completion_tokens
+        return tk1, tk2
+
+    def _api_call(self, endpoint, data, api_key, retries=10, retry_grace_time=10):
+        for _ in range(retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self._DEPLOYMENT_NAME,
+                    messages=data,
+                    max_tokens=2000,  # self.genparams.max_tokens
+                    temperature=0.7,  # self.genparams.temperature
+                    top_p=0.95,
+                    frequency_penalty=0,
+                    presence_penalty=0,
+                    stop=None,
+                    stream=False
+                )
+                return response
+            except Exception as e:
+                print(f"Failed to call API: {e}, retrying...")
+                time.sleep(retry_grace_time)
+        raise TimeoutError(f"API request failed {retries} times, giving up!")
+
+
+class AzureGPT4oMiniModelProvider(APIModelProvider):
+    _ENDPOINT = os.environ.get("OPENAI_4omini_ENDPOINT", "https://azure-openai-dev-001.openai.azure.com/")
+    _DEPLOYMENT_NAME = os.environ.get("DEPLOYMENT_NAME", "gpt-4o-mini")
+    _API_KEY = os.environ.get("OPENAI_4omini_API_KEY", None)
+    _NAME = "azure_gpt4o_mini"
+
+    def __init__(self, model):
+        self._model = model
+        self.token_provider = get_bearer_token_provider(
+            DefaultAzureCredential(),
+            "https://cognitiveservices.azure.com/.default"
+        )
+
+        self.client = AzureOpenAI(
+            azure_endpoint=self._ENDPOINT,
+            azure_ad_token_provider=self.token_provider,
+            api_version="2024-05-01-preview",
+        )
+
+    def _request_format(self, context, genparams):
+        chat_prompt = [
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "You are an AI assistant that helps people find information."
+                    }
+                ]
+            },
+            {
+                "role": "user",
+                "content": context
+            }
+        ]
+        return chat_prompt
+
+    def _response_format(self, response):
+        result = dict()
+        result['raw'] = response
+        result["completion"] = response.choices[0].message.content
+        return result
+
+    def _get_io_tokens(self, context, completion):
+        usage = completion['raw'].usage
+        tk1 = usage.prompt_tokens
+        tk2 = usage.completion_tokens
+        return tk1, tk2
+
+    def _api_call(self, endpoint, data, api_key, retries=10, retry_grace_time=10):
+        for _ in range(retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self._DEPLOYMENT_NAME,
+                    messages=data,
+                    max_tokens=2000,  # self.genparams.max_tokens
+                    temperature=0.7,  # self.genparams.temperature
+                    top_p=0.95,
+                    frequency_penalty=0,
+                    presence_penalty=0,
+                    stop=None,
+                    stream=False
+                )
+                return response
+            except Exception as e:
+                print(f"Failed to call API: {e}, retrying...")
+                time.sleep(retry_grace_time)
+        raise TimeoutError(f"API request failed {retries} times, giving up!")
+
+
 
 _PROVIDER_MAP = {
-    "openai": OpenAIModelProvider, # cleaned
-    "ai21": AI21ModelProvider, # cleaned
-    "cohere":CohereAIModelProvider, # cleaned
-    "forefrontai":ForeFrontAIModelProvider, # cleaned
-    "textsynth":TextSynthModelProvider, # cleaned
-    "openaichat":OpenAIChatModelProvider,# cleaned
-    "anthropic":AnthropicModelProvider,
-    "togetherai":TogetherAIModelProvider,
-    "google":GoogleModelProvider,
+    #"openai": OpenAIModelProvider, # cleaned
+    #"ai21": AI21ModelProvider, # cleaned
+    #"cohere":CohereAIModelProvider, # cleaned
+    #"openaichat":OpenAIChatModelProvider,# cleaned
+    #"llama": LlamaModelProvider,  # Ajout de LlamaModelProvider
+    #"azure_ai21": AI21ModelProvider,
+    #"azure_cohere": AzureCohereModelProvider,
+    
+    "azure_openai": AzureOpenAIModelProvider,
+    "azure_llama": AzureLlamaModelProvider,
+    "azure_mistral_nemo" : AzureMistralNemoModelProvider,
+    "azure_ministral" : AzureMinistralModelProvider,
+    "azure_gpt4o": AzureGPT4oModelProvider,
+    "azure_gpt4o_mini": AzureGPT4oMiniModelProvider,
 
 }
 
+
+
+#"anthropic":AnthropicModelProvider,
+#"togetherai":TogetherAIModelProvider,
+#"google":GoogleModelProvider,
+#"forefrontai":ForeFrontAIModelProvider, # cleaned
+#"textsynth":TextSynthModelProvider, # cleaned
 
 def make_model(provider, model):
     assert provider in _PROVIDER_MAP, f"No model provider '{provider}' implemented"

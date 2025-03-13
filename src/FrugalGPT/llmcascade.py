@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0, 'app/backend/src/')
+
 from .llmvanilla import LLMVanilla
 from service.modelservice import GenerationParameter
 import pandas
@@ -7,6 +10,8 @@ from sklearn.model_selection import train_test_split
 from .llmchain import LLMChain
 import json, os
 import random
+import logging
+from pathlib import Path
 
 def scorer_text(text):
     #return text
@@ -17,14 +22,14 @@ def scorer_text(text):
 def tempsave(label, response, score,name):
     return
 
-
 class LLMCascade(object):
     def __init__(self, 
                  #service_names =['openaichat/gpt-3.5-turbo','openaichat/gpt-4'],
                  metric="em",
-                 db_path='db/HEADLINES.sqlite',
+                 db_path= Path(__file__).parent.parent.parent / "db" / "AGNEWS.sqlite",
                  score_noise_injection=False,
                  batch_build = False,
+                 prefix="",
                  ):
         # Initialization code for the FrugalGPT class
         self.MyLLMEngine = LLMVanilla(db_path=db_path)    
@@ -34,21 +39,23 @@ class LLMCascade(object):
         self.eps=1e-8
         self.score_noise_injection = score_noise_injection
         self.batch_build = batch_build
+        self.prefix = prefix
         return 
 
     def load(self,loadpath="strategy/HEADLINES/",budget=0.01):
         self.LLMChain = LLMChain()
         self.LLMChain.setbudget(budget=budget)
-        self.LLMChain.loadstrategy(loadpath+"cascade_strategy.json")        
-        model_names = self.loadmodelnames(loadpath)
-        #print("model names",model_names)
+        self.LLMChain.loadstrategy(Path(__file__).parent.parent.parent  / "strategy" / "AGNEWS_Model20252602" / "cascade_strategy.json")        
+        model_names = self.loadmodelnames(Path(__file__).parent.parent.parent  / "strategy" / "AGNEWS_Model20252602/")
         self.scorer = dict()
         for name in model_names:
-            path1 = loadpath+name+"/"
+            path1 = (Path(__file__).parent.parent.parent  / "strategy" / "AGNEWS_Model20252602/" / name / "")
             self.MyScores[name]=Score()
             self.MyScores[name].load(path1)
             self.scorer[name]  = self.MyScores[name].get_model()
-        #print("scoer keys:",self.scorer.keys())
+            #logging.critical(f"Loaded scorer for service: {name}")
+        #logging.critical(f"Loaded model names: {model_names}")
+        #logging.critical(f"Available scorers: {self.MyScores.keys()}")
         return
     
     def loadmodelnamesold(self,loadpath):
@@ -66,8 +73,8 @@ class LLMCascade(object):
       directories = []
       for dirpath, dirnames, _ in os.walk(loadpath):
           if not dirnames:  # If there are no more subdirectories, it's the last directory
-              subdirectory_name = os.path.relpath(dirpath, loadpath)
-              directories.append(subdirectory_name)
+            subdirectory_name = os.path.relpath(dirpath, loadpath)
+            directories.append(subdirectory_name)
       keys = directories
       return keys  # Return the directories list if needed
 
@@ -76,7 +83,8 @@ class LLMCascade(object):
         # Save both Scores and LLChains to the disk
         if not os.path.exists(savepath):
             os.makedirs(savepath)
-        self.LLMChain.savestrategy(savepath+"cascade_strategy.json")
+        strategy_path = savepath+"cascade_strategy.json"    
+        self.LLMChain.savestrategy(strategy_path)
         if(self.no_scorer_train):
             return
         for name in self.MyScores:
@@ -103,14 +111,14 @@ class LLMCascade(object):
         # Three major steps
         # Step 1: evaluate all services on the given dataset
         train, test = train_test_split(trainingdata, test_size=0.01)
-        #print("train and test size",len(train),len(test))
+        print("train and test size",len(train),len(test))
         model_perf_train = self.evaluateall(train,service_names=service_names,metric=metric,genparams=genparams)
         model_perf_test = self.evaluateall(test,service_names=service_names,metric=metric,genparams=genparams)
         # Step 2: Build the scorer
         if(no_scorer_train):
-            #print("directly get the scorers")
+            print("directly get the scorers")
             scorers = self.get_scorers()
-            #print("")
+            print("")
         else:
             scorers = self.build_scorers(model_perf_train)
         # Step 3: Build the cascade
@@ -118,35 +126,43 @@ class LLMCascade(object):
         self.build_cascade(model_perf_train, scorers = scorers, budget=budget, cascade_depth=cascade_depth,metric=metric)
         return model_perf_test
     
-    def get_completion(self, query,genparams):
+    def get_completion(self, query, genparams):
         LLMChain = self.LLMChain
         MyLLMEngine = self.MyLLMEngine
         cost = 0 
         LLMChain.reset()
         prefix = self.prefix
+        res = None  # Initialize res
+        model_used = None  # Initialize model_used
         while(1):
             service_name, score_thres = LLMChain.nextAPIandScore()
             if(service_name==None):
                 break
+            logging.critical(f"Using service: {service_name}")
             res = MyLLMEngine.get_completion(query=query,service_name=service_name,genparams=genparams)
             cost += MyLLMEngine.get_cost()
             t1 = query+" "+res
+            #print(t1)
             t2 = t1.removeprefix(prefix)
+            service_name = service_name.replace("/", "\\")
             score = self.MyScores[service_name].get_score(scorer_text(t2))
             if(self.score_noise_injection==True):
-              score+=random.random()*self.eps
-            #print("score and score thres:",service_name,score,score_thres)
+                score+=random.random()*self.eps
+            #if score > score_thres:
             if(score>1-score_thres):
+                #print("score and score thres:",service_name,score, (1-score_thres))
+                model_used = service_name  # Set the model used
+                #print(model_used)
                 break
         self.cost = cost
-        return res
+        return res if res is not None else "", model_used  # Return the response and model used
 
     def get_completion_batch(self, queries, genparams):
         result = list()
         for query in queries:
-            ans1 = self.get_completion(query=query[0], genparams=genparams)
+            ans1, model_used = self.get_completion(query=query[0], genparams=genparams)
             cost = self.get_cost()
-            result.append({'_id':query[2],'answer':ans1,'ref_answer':query[1],'cost':cost})
+            result.append({'_id':query[2],'answer':ans1,'ref_answer':query[1],'cost':cost, 'model_used': model_used})
         result = pandas.DataFrame(result)
         return result
         
@@ -200,7 +216,7 @@ class LLMCascade(object):
     
     def get_scores(self, data, name):
         eps=self.eps
-        model = self.scorer[name]
+        #model = self.scorer[name]
         scores_dict = dict()
         rawdata = data[['_id','query','answer']].to_dict(orient='records')
         for ptr in rawdata:

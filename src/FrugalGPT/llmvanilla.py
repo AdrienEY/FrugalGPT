@@ -3,15 +3,18 @@ from sqlitedict import SqliteDict
 import json, logging, pandas
 from transformers import GPT2Tokenizer
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-from .utils import help, getservicename
+from FrugalGPT.utils import help, getservicename
 
 global mydict
 
 import concurrent.futures
 from collections import OrderedDict
 from tqdm import tqdm
+from pathlib import Path
 
-serviceidmap = json.load(open("config/serviceidmap.json"))
+# Get the absolute path to the config directory
+config_path = Path(__file__).parent.parent.parent / "config" / "serviceidmap.json"
+serviceidmap = json.load(open(config_path))
 
 def form_keys(service_id,
               genparams,
@@ -25,8 +28,8 @@ def form_keys(service_id,
 class LLMVanilla(object):
     def __init__(self, 
                  service_name=None,
-                 db_path="db/qa_cache.sqlite",
-                 db_path_new = 'db/HEADLINES.sqlite',
+                 db_path= Path(__file__).parent.parent.parent / "db" / "AGNEWS.sqlite",
+                 db_path_new = Path(__file__).parent.parent.parent / "db" / "HEADLINES.sqlite",
                  max_workers=2,
                  ):
         self.max_workers = max_workers
@@ -121,7 +124,7 @@ class LLMVanilla(object):
                                          use_save=use_save,
                                          genparams=genparams)  
             mydict[key] = completion
-     
+
         if(use_db==False):
             completion = model.getcompletion(query,
                                          use_save=use_save,
@@ -178,7 +181,7 @@ class LLMVanilla(object):
                                                    stop=["\n"],
 ),
                       ):
-        '''
+        """
         result = list()
         for query in queries:
             answer = self.get_completion(query=query[0],
@@ -191,7 +194,7 @@ class LLMVanilla(object):
             #print(answer)
             cost = self.get_cost()
             result.append({'_id':query[2],'answer':answer,'ref_answer':query[1],'cost':cost})
-        '''
+        """
         result = self.parallel_process_queries(queries, service_name, use_save, use_db, savepath, genparams)
         #print(f"result is {result}")
         result = pandas.DataFrame(result)

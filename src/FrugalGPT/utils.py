@@ -1,5 +1,6 @@
 import json
 import csv
+from pathlib import Path
 
 def help():
     print("Welcome to use FrugalGPT!")
@@ -7,8 +8,9 @@ def help():
     print("LLMCascade, and LLMforAll!")
     return 
 
-def getservicename(configpath='config/serviceinfo.json'):
-    service = json.load(open(configpath))
+def getservicename(configpath='app/backend/config/serviceinfo.json'):
+    config_path = Path(__file__).parent.parent.parent / "config" / "serviceinfo.json"
+    service = json.load(open(config_path))
     names = [provider + "/" + name for provider in service.keys() for name in service[provider]]
     return names
 
