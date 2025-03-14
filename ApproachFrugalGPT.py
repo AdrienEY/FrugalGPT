@@ -11,16 +11,14 @@ from tqdm import tqdm
 import shutil
 import copy
 
-load_dotenv()
-
-#print(os.environ)
-
-sys.path.insert(0, 'app/backend/src/')
-#sys.path.insert(0, 'app/backend/src/service/')
-
+sys.path.append("src/")
 import FrugalGPT
 
+load_dotenv()
+
+
 supported_LLM = FrugalGPT.getservicename()
+
 #print("supported LLMs:",supported_LLM)
 
 
@@ -67,17 +65,17 @@ def convert_and_merge_dataframes(train_df, test_df):
     return converted_train_df, converted_test_df  
 
 
-train_raw = FrugalGPT.loadcsvdata("app\\backend\\data\\AGNEWS\\AGNEWS_train.csv")
-test_raw = FrugalGPT.loadcsvdata("app\\backend\\data\\AGNEWS\\AGNEWS_test.csv")
+train_raw = FrugalGPT.loadcsvdata("data\\AGNEWS\\AGNEWS_train.csv")
+test_raw = FrugalGPT.loadcsvdata("data\\AGNEWS\\AGNEWS_test.csv")
 train_df = list_to_dataframe(train_raw)
 test_df = list_to_dataframe(test_raw)
 converted_train, converted_test = convert_and_merge_dataframes(train_df, test_df)
 columns_to_save = ['query', 'ref_answer', 'query_id']
-converted_train[columns_to_save].to_csv("app\\backend\\data\\AGNEWS\\train.csv", index=False, header=False)
-converted_test[columns_to_save].to_csv("app\\backend\\data\\AGNEWS\\test.csv",index=False, header=False)
+converted_train[columns_to_save].to_csv("data\\AGNEWS\\train.csv", index=False, header=False)
+converted_test[columns_to_save].to_csv("data\\AGNEWS\\test.csv",index=False, header=False)
 
 
-def generate_dataframe(service_names, train_data, test_data, genparams,db_path="app\\backend\\db\\AGNEWS.sqlite",
+def generate_dataframe(service_names, train_data, test_data, genparams,db_path="db\\AGNEWS.sqlite",
                        max_workers=2):
     # Initialize an empty list to store the rows for the DataFrame
     data = []
@@ -168,22 +166,22 @@ genparams=FrugalGPT.GenerationParameter(max_tokens=50, temperature=0.1, stop=['\
 
 
 
-test_data = FrugalGPT.loadcsvdata(f"app\\backend\\data\\{dataname}\\train.csv")
-prefix = open(f'app\\backend\\config\\prompt\\{dataname}\\prefix_e8.txt').read()
+test_data = FrugalGPT.loadcsvdata(f"data\\{dataname}\\train.csv")
+prefix = open(f'config\\prompt\\{dataname}\\prefix_e8.txt').read()
 test_data = FrugalGPT.formatdata(test_data,prefix)
 
-train_data = FrugalGPT.loadcsvdata(f"app\\backend\\data\\{dataname}\\test.csv")
-prefix = open(f'app\\backend\\config\\prompt\\{dataname}\\prefix_e8.txt').read()
+train_data = FrugalGPT.loadcsvdata(f"data\\{dataname}\\test.csv")
+prefix = open(f'config\\prompt\\{dataname}\\prefix_e8.txt').read()
 train_data = FrugalGPT.formatdata(train_data,prefix)
 
 sample_size = 100
 individualmodel_df = generate_dataframe(service_names,
                                         train_data[0:sample_size], test_data[0:sample_size],
                                         genparams,
-                                        db_path=f"app\\backend\\db\\{dataname}.sqlite",
+                                        db_path=f"db\\{dataname}.sqlite",
                                         max_workers=2)
 display(individualmodel_df)
-individualmodel_df.to_csv(f"summary_{dataname}_e8_2024.csv")
+#individualmodel_df.to_csv(f"summary_{dataname}_e8_2024.csv")
 
 
 
@@ -204,7 +202,7 @@ def compute_tradeoffs(
                       skip=0,
     MyCascade = FrugalGPT.LLMCascade(
           score_noise_injection=False,
-  db_path="app\\backend\\db\\AGNEWS.sqlite",
+  db_path="db\\AGNEWS.sqlite",
   ),
 
     cascade_depth=3,
@@ -215,7 +213,7 @@ def compute_tradeoffs(
     # train the model
     user_budget = budget
     try:
-      MyCascade.load(loadpath=f"app/backend/strategy/{name}/",budget=user_budget)
+      MyCascade.load(loadpath=f"strategy/{name}/",budget=user_budget)
       print("Already trained. Skipped.")
       continue
     except:
@@ -240,7 +238,7 @@ def compute_tradeoffs(
   score_test_size=0.55,
 
                                )
-    MyCascade.save(savepath=f"app/backend/strategy/{name}/")
+    MyCascade.save(savepath=f"strategy/{name}/")
   return
 
 
@@ -255,11 +253,11 @@ budget_list = numpy.linspace(start_budget, end_budget, num_eval)
 budget_list[0] = 0.00001
 #budget_list = budget_list[::-1]
 # load data
-dev = FrugalGPT.loadcsvdata(f"app\\backend\\data\\{dataname}\\train.csv")
+dev = FrugalGPT.loadcsvdata(f"data\\{dataname}\\train.csv")
 train_data = FrugalGPT.formatdata(dev,prefix)
 MyCascade= FrugalGPT.LLMCascade(
           score_noise_injection=False,
-  db_path=f"app\\backend\\db\\{dataname}.sqlite",
+  db_path=f"db\\{dataname}.sqlite",
   batch_build=True,
   )
 
@@ -288,12 +286,12 @@ compute_tradeoffs(train_data=train_data[0:100],
 
 
 # Specify the folder to zip
-folder_to_zip = f'app/backend/strategy/{name}'
-output_zip_file = f'{name}.zip'
+#folder_to_zip = f'strategy/{name}'
+#output_zip_file = f'{name}.zip'
 
 # Create the zip file
-shutil.make_archive(output_zip_file.replace('.zip', ''), 'zip', folder_to_zip)
-print(f"Folder '{folder_to_zip}' zipped as '{output_zip_file}'.")
+#shutil.make_archive(output_zip_file.replace('.zip', ''), 'zip', folder_to_zip)
+#print(f"Folder '{folder_to_zip}' zipped as '{output_zip_file}'.")
 
 
 
@@ -304,7 +302,7 @@ def generate_dataframe_from_cascade(MyCascade,budget_list, train_data, test_data
     # Iterate through the budget list
     for budget in tqdm(budget_list):
         # Load the strategy for the given budget
-        MyCascade.load(loadpath=f"app/backend/strategy/{name}/", budget=budget)
+        MyCascade.load(loadpath=f"strategy/{name}/", budget=budget)
 
         # Get the completion batch for train data
         train_result = MyCascade.get_completion_batch(queries=train_data, genparams=genparams)
@@ -348,12 +346,12 @@ frugalgpt_df = generate_dataframe_from_cascade(MyCascade_eval,
                                                budget_list, train_data[0:100], test_data[0:100], genparams,
                                                name)
 display(frugalgpt_df)
-frugalgpt_df.to_csv(f"summary_{dataname}_e8_frugalgpt_2024.csv")
+#frugalgpt_df.to_csv(f"summary_{dataname}_e8_frugalgpt_2024.csv")
 
 
 individualmodel_df2 = copy.copy(individualmodel_df)
 #individualmodel_df2['Test_cost'] = individualmodel_df2['Test_cost'] * individualmodel_df2['Test_size']
 full_pd = pd.concat([frugalgpt_df,individualmodel_df2,])
-full_pd.to_csv(f"summary_{dataname}_e8_full_2024.csv")
+#full_pd.to_csv(f"summary_{dataname}_e8_full_2024.csv")
 display(full_pd)
 

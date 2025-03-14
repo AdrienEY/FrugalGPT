@@ -13,7 +13,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 # Get the absolute path to the config directory
-config_path = Path(__file__).parent.parent.parent / "config" / "serviceidmap.json"
+config_path = "config\serviceidmap.json"
 serviceidmap = json.load(open(config_path))
 
 def form_keys(service_id,
@@ -28,8 +28,8 @@ def form_keys(service_id,
 class LLMVanilla(object):
     def __init__(self, 
                  service_name=None,
-                 db_path= Path(__file__).parent.parent.parent / "db" / "AGNEWS.sqlite",
-                 db_path_new = Path(__file__).parent.parent.parent / "db" / "HEADLINES.sqlite",
+                 db_path= "db/AGNEWS.sqlite",
+                 db_path_new = "db/HEADLINES.sqlite",
                  max_workers=2,
                  ):
         self.max_workers = max_workers

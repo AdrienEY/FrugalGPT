@@ -8,8 +8,8 @@ def help():
     print("LLMCascade, and LLMforAll!")
     return 
 
-def getservicename(configpath='app/backend/config/serviceinfo.json'):
-    config_path = Path(__file__).parent.parent.parent / "config" / "serviceinfo.json"
+def getservicename(configpath='config/serviceinfo.json'):
+    config_path = "config/serviceinfo.json"
     service = json.load(open(config_path))
     names = [provider + "/" + name for provider in service.keys() for name in service[provider]]
     return names

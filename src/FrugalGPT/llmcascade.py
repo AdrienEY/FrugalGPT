@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0, 'app/backend/src/')
+sys.path.insert(0, 'src/')
 
 from .llmvanilla import LLMVanilla
 from service.modelservice import GenerationParameter

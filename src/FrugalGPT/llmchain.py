@@ -19,7 +19,7 @@ class Strategy(object):
         raise NotImplementedError
     def evaluate(self,responses:dict,labels:dict):
         return utils.evaluate_batch(responses,labels)            
-    def loadstrategy(self,strategy_path="app/backend/strategy/cascade_strategy.json"):
+    def loadstrategy(self,strategy_path="strategy/cascade_strategy.json"):
         if(1<2):
             filepath = self.strategy_path
             if(strategy_path==""):
@@ -57,7 +57,7 @@ class Strategy(object):
             print("fail to load")
             return False
         
-    def savestrategy(self,strategy_path="app/backend/strategy/cascade_strategy.json"):
+    def savestrategy(self,strategy_path="strategy/cascade_strategy.json"):
         filepath = strategy_path
         if(strategy_path==""):
             filepath = strategy_path

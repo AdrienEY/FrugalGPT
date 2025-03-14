@@ -145,7 +145,7 @@ class Score(object):
         val_dataset = IMDbDataset(val_encodings, val_labels)
 
         training_args = TrainingArguments(
-    output_dir='app/backend/scorer_location',          # output directory
+    output_dir='scorer_location',          # output directory
     num_train_epochs=8,              # total number of training epochs
     per_device_train_batch_size=8,  # batch size per device during training
     per_device_eval_batch_size=64,   # batch size for evaluation

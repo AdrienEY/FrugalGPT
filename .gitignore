@@ -7,6 +7,7 @@
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
 
@@ -151,9 +152,15 @@ static/
 
 data/**/*.md5
 
-# Ignorer les fichiers SQLite volumineux
+# Add by AdrienEY
 AGNEWS.sqlite
 HEADLINES.sqlite
 *.sqlite
 db/AGNEWS.sqlite
 db/HEADLINES.sqlite
+*.csv
+*.safetensors
+*.pt
+*.pth
+*.bin
+*.json
