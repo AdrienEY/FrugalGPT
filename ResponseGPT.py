@@ -19,7 +19,7 @@ import copy
 #if src_path not in sys.path:
 #    sys.path.append(str(src_path))
 
-sys.path.insert(0, 'app/backend/src/')
+sys.path.insert(0, 'src/')
 import FrugalGPT
 
 load_dotenv()
