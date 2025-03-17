@@ -355,3 +355,54 @@ full_pd = pd.concat([frugalgpt_df,individualmodel_df2,])
 #full_pd.to_csv(f"summary_{dataname}_e8_full_2024.csv")
 display(full_pd)
 
+
+
+
+############### graph ##################
+
+"""
+# Import matplotlib
+import matplotlib.pyplot as plt
+
+# Create the plot
+plt.figure(figsize=(12, 8))
+
+# Plot FrugalGPT points with split data
+frugal_data = full_pd[full_pd['Method'] == 'FrugalGPT'].sort_values('Budget')
+
+# First two points with Test_cost
+first_two = frugal_data.iloc[:2]
+plt.scatter(first_two['Test_cost'], first_two['Test_acc'], 
+           label='FrugalGPT (Test_cost)', color='blue', s=100)
+
+# Remaining points with Budget
+remaining = frugal_data.iloc[2:]
+plt.scatter(remaining['Budget'], remaining['Test_acc'], 
+           label='FrugalGPT (Budget)', color='blue', s=100)
+
+# Add connecting lines for FrugalGPT points
+x_values = list(first_two['Test_cost']) + list(remaining['Budget'])
+y_values = list(first_two['Test_acc']) + list(remaining['Test_acc'])
+plt.plot(x_values, y_values, color='blue', linestyle='-', alpha=0.5)
+
+# Plot individual models
+other_data = full_pd[full_pd['Method'] != 'FrugalGPT']
+for Method in other_data['Method'].unique():
+    Method_data = other_data[other_data['Method'] == Method]
+    plt.scatter(Method_data['Test_cost'], Method_data['Test_acc'], 
+               label=Method, s=100, alpha=0.7)
+
+# Customize the plot
+plt.xlabel('Cost per query ($)', fontsize=12)
+plt.ylabel('Accuracy', fontsize=12)
+plt.title('Model Performance: Accuracy vs Cost', fontsize=14)
+plt.grid(True, linestyle='--', alpha=0.7)
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+
+# Adjust layout to prevent label cutoff
+plt.tight_layout()
+
+# Show the plot
+plt.show()
+
+"""

@@ -24,3 +24,4 @@ azure-identity
 #azure-ai-openai
 fastapi
 uvicorn[standard]
+matplotlib
