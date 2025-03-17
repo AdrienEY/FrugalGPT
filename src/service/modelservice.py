@@ -911,9 +911,9 @@ class AzureMinistralModelProvider(APIModelProvider):
     
 
 class AzureOpenAIModelProvider(APIModelProvider):
-    _ENDPOINT = os.environ.get("OPENAI_ENDPOINT", "https://cognitiveservices.openai.azure.com/")
-    _DEPLOYMENT_NAME = os.environ.get("DEPLOYMENT_NAME", "chat")
-    _API_KEY = os.environ.get("OPENAI_API_KEY", None)
+    _ENDPOINT = os.environ.get("OPENAI_GPT35_ENDPOINT", "https://cognitiveservices.openai.azure.com/")
+    _DEPLOYMENT_NAME = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "chat")
+    _API_KEY = os.environ.get("OPENAI_GPT35_API_KEY", None)
     _NAME = "azure_openai"
     
     def __init__(self, model):

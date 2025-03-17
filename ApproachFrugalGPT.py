@@ -135,8 +135,8 @@ def generate_dataframe(service_names, train_data, test_data, genparams,db_path="
 
 dataname = "AGNEWS"
 service_names = [
-    #'azure_openai/gpt-3.5-turbo',
-    #'azure_llama/llama-3-70b-instruct',
+    'azure_openai/gpt-3.5-turbo',
+    'azure_llama/llama-3-70b-instruct',
     'azure_gpt4o/gpt-4o',
     'azure_mistral_nemo/mistral-nemo',
     'azure_ministral/ministral',
@@ -191,8 +191,8 @@ def compute_tradeoffs(
                       name = "test",
 
                       service_names = [ 'azure_gpt4o/gpt-4o',
-                                        #'azure_openai/gpt-3.5-turbo',
-                                        #'azure_llama/llama-3-70b-instruct',
+                                        'azure_openai/gpt-3.5-turbo',
+                                        'azure_llama/llama-3-70b-instruct',
                                         'azure_mistral_nemo/mistral-nemo',
                                         'azure_ministral/ministral',
                                         'azure_gpt4o_mini/gpt-4o-mini',
@@ -266,8 +266,8 @@ MyCascade= FrugalGPT.LLMCascade(
 
 service_names_train = [
                         'azure_gpt4o/gpt-4o',
-                        #'azure_llama/llama-3-70b-instruct',
-                        #'azure_openai/gpt-3.5-turbo',
+                        'azure_llama/llama-3-70b-instruct',
+                        'azure_openai/gpt-3.5-turbo',
                         'azure_mistral_nemo/mistral-nemo',
                         'azure_ministral/ministral',
                         'azure_gpt4o_mini/gpt-4o-mini',
