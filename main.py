@@ -3,8 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sys
 from dotenv import load_dotenv
+
 sys.path.insert(0, 'src/')
 import FrugalGPT
+import service
+from service.modelservice import AzureGPT4oModelProvider, GenerationParameter
 
 app = FastAPI()
 
@@ -58,10 +61,47 @@ def execute_cascade_logic(prompt: str):
     except Exception as e:
         raise Exception(f"Erreur lors de l'exécution de la cascade : {str(e)}")
 
+def execute_gpt4o(prompt: str):
+    try:
+        # Initialize the GPT4o provider
+        provider = AzureGPT4oModelProvider("gpt-4o")
+        
+        # Set generation parameters
+        genparams = GenerationParameter(
+            max_tokens=50,
+            temperature=0.1,
+            stop=['\n']
+        )
+        
+        # Get completion from the model
+        result = provider.getcompletion(
+            context=prompt,
+            genparams=genparams
+        )
+        
+        return {
+            "answer": result["completion"],
+            "cost": provider._get_cost(prompt, result),
+            "model_used": "gpt-4o"
+        }
+            
+    except Exception as e:
+        raise Exception(f"Error executing GPT4o request: {str(e)}")
+
 @app.post("/execute_cascade")
 async def execute_cascade(request: CascadeRequest):
     try:
         result = execute_cascade_logic(
+            prompt=request.prompt
+        )
+        return {"status": "success", "result": result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/execute_gpt4o")
+async def execute_gpt4o_endpoint(request: CascadeRequest):
+    try:
+        result = execute_gpt4o(
             prompt=request.prompt
         )
         return {"status": "success", "result": result}
