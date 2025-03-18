@@ -25,3 +25,5 @@ azure-identity
 fastapi
 uvicorn[standard]
 matplotlib
+sentence-transformers
+faiss-cpu
