@@ -1,6 +1,7 @@
 import sys
 sys.path.insert(0, 'src/')
 
+
 from .llmvanilla import LLMVanilla
 from service.modelservice import GenerationParameter
 import pandas
@@ -12,7 +13,6 @@ import json, os
 import random
 import logging
 from pathlib import Path
-from .llmcache import LLMCache
 
 def scorer_text(text):
     #return text
@@ -31,8 +31,6 @@ class LLMCascade(object):
                  score_noise_injection=False,
                  batch_build = False,
                  prefix="",
-                 use_cache=True,
-                 cache_similarity_threshold=0.95
                  ):
         # Initialization code for the FrugalGPT class
         self.MyLLMEngine = LLMVanilla(db_path=db_path)    
@@ -43,9 +41,6 @@ class LLMCascade(object):
         self.score_noise_injection = score_noise_injection
         self.batch_build = batch_build
         self.prefix = prefix
-        self.use_cache = use_cache
-        if use_cache:
-            self.cache = LLMCache(similarity_threshold=cache_similarity_threshold)
         return 
 
     def load(self,loadpath="strategy/HEADLINES/",budget=0.01):
@@ -62,10 +57,6 @@ class LLMCascade(object):
             #logging.critical(f"Loaded scorer for service: {name}")
         #logging.critical(f"Loaded model names: {model_names}")
         #logging.critical(f"Available scorers: {self.MyScores.keys()}")
-        if self.use_cache:
-            cache_path = Path(__file__).parent.parent.parent / "cache" / "query_cache.json"
-            if cache_path.exists():
-                self.cache.load(str(cache_path))
         return
     
     def loadmodelnamesold(self,loadpath):
@@ -137,11 +128,6 @@ class LLMCascade(object):
         return model_perf_test
     
     def get_completion(self, query, genparams):
-        if self.use_cache:
-            cached_query, cached_result = self.cache.find_similar_query(query)
-            if cached_result is not None:
-                self.cost = 0  # No cost for cached results
-                return cached_result['response'], cached_result['model_used']
 
         LLMChain = self.LLMChain
         MyLLMEngine = self.MyLLMEngine
@@ -158,24 +144,15 @@ class LLMCascade(object):
             res = MyLLMEngine.get_completion(query=query,service_name=service_name,genparams=genparams)
             cost += MyLLMEngine.get_cost()
             t1 = query+" "+res
-            #print(t1)
             t2 = t1.removeprefix(prefix)
             service_name = service_name.replace("/", "\\")
             score = self.MyScores[service_name].get_score(scorer_text(t2))
             if(self.score_noise_injection==True):
                 score+=random.random()*self.eps
-            #if score > score_thres:
             if(score>1-score_thres):
-                #print("score and score thres:",service_name,score, (1-score_thres))
                 model_used = service_name  # Set the model used
-                #print(model_used)
                 break
         self.cost = cost
-        if self.use_cache and res:
-            self.cache.add_to_cache(query, res, model_used)
-            cache_path = Path(__file__).parent / "cache"
-            cache_path.mkdir(exist_ok=True)
-            self.cache.save(str(cache_path / "query_cache.json"))
         return res if res is not None else "", model_used  # Return the response and model used
 
     def get_completion_batch(self, queries, genparams):
