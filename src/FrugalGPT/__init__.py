@@ -1,6 +1,7 @@
 from .utils import help, getservicename, formatdata, loadcsvdata
 #from .frugalgpt import FrugalGPT
 from .llmcascade import LLMCascade
+from .llmcache import LLMCascade_cache
 from .llmvanilla import LLMVanilla as LLMforAll
 from .dataloader import DataLoader
 from service.modelservice import GenerationParameter

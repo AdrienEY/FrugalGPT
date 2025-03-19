@@ -202,7 +202,7 @@ def compute_tradeoffs(
                       skip=0,
     MyCascade = FrugalGPT.LLMCascade(
           score_noise_injection=False,
-  db_path="db\\AGNEWS.sqlite",
+  db_path="db\\AGNEWS.sqlite"
   ),
 
     cascade_depth=3,
@@ -261,7 +261,7 @@ MyCascade= FrugalGPT.LLMCascade(
   batch_build=True,
   )
 
-#MyCascade.load(loadpath=f"app/backend/strategy/{name}/",budget=0.0065) #0.00017
+#MyCascade.load(loadpath=f"app/backend/strategy/{name}/",budget=0.0005733333333333334) #0.00017
 
 
 service_names_train = [

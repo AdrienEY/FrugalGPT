@@ -31,7 +31,7 @@ load_dotenv()
 
 def execute_cascade_logic(prompt: str):
     # Initialiser la cascade avec des paramètres par défaut
-    MyCascade = FrugalGPT.LLMCascade()
+    MyCascade = FrugalGPT.LLMCascade_cache()
     strategy_path = 'strategy/cascade_strategy.json'
     
     try:
