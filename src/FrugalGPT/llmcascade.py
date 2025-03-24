@@ -8,7 +8,7 @@ from service.utils import evaluate
 from .scoring import Score
 from sklearn.model_selection import train_test_split
 from .llmchain import LLMChain
-import json, os
+import os
 import random
 import logging
 from pathlib import Path

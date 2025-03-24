@@ -11,7 +11,6 @@ from service.modelservice import AzureGPT4oModelProvider, GenerationParameter
 
 app = FastAPI()
 
-
 # uvicorn main:app --reload
 
 # Configure CORS
@@ -25,11 +24,15 @@ app.add_middleware(
 
 class CascadeRequest(BaseModel):
     prompt: str
+    conversation_history: list = []  # Ajout de l'historique de la conversation si nécessaire
+    system_prompt: str = ""  # Ajout du prompt système si nécessaire
+    few_shots: list = []  # Ajout des exemples de few-shots si nécessaire
+    content: str
 
 # Charger les variables d'environnement
 load_dotenv()
 
-def execute_cascade_logic(prompt: str):
+def execute_cascade_logic(prompt: str, content: str, system_prompt: str, few_shots: list):
     # Initialiser la cascade avec des paramètres par défaut
     MyCascade = FrugalGPT.LLMCascade_cache()
     strategy_path = 'strategy/cascade_strategy.json'
@@ -41,16 +44,21 @@ def execute_cascade_logic(prompt: str):
         
         # Paramètres de génération fixes
         genparams = FrugalGPT.GenerationParameter(
-            max_tokens=50,
+            max_tokens=200,
             temperature=0.1,
             stop=['\n']
         )
-        
+
         # Utiliser get_completion au lieu de get_completion_batch
         answer, model_used = MyCascade.get_completion(
             query=prompt,
-            genparams=genparams
+            genparams=genparams,
+            system_prompt = system_prompt,
+            content = content,
+            few_shots = few_shots
         )
+
+        
         
         return {
             "answer": answer,
@@ -61,22 +69,28 @@ def execute_cascade_logic(prompt: str):
     except Exception as e:
         raise Exception(f"Erreur lors de l'exécution de la cascade : {str(e)}")
 
-def execute_gpt4o(prompt: str):
+def execute_gpt4o(prompt: str, content: str, system_prompt: str, few_shots: list):
     try:
         # Initialize the GPT4o provider
         provider = AzureGPT4oModelProvider("gpt-4o")
         
         # Set generation parameters
         genparams = GenerationParameter(
-            max_tokens=50,
+            max_tokens=200,
             temperature=0.1,
             stop=['\n']
         )
         
+        # Incorporer l'historique de la conversation, le système et les few-shots dans la requête
+
+        
         # Get completion from the model
-        result = provider.getcompletion(
-            context=prompt,
-            genparams=genparams
+        result = provider._request_format(
+            query=prompt,
+            genparams=genparams,
+            system_prompt = system_prompt,
+            content = content,
+            few_shots = few_shots
         )
         
         return {
@@ -92,7 +106,11 @@ def execute_gpt4o(prompt: str):
 async def execute_cascade(request: CascadeRequest):
     try:
         result = execute_cascade_logic(
-            prompt=request.prompt
+            prompt=request.prompt,
+            system_prompt=request.system_prompt,
+            content = request.content,
+            few_shots=request.few_shots
+            #conversation_history=request.conversation_history
         )
         return {"status": "success", "result": result}
     except Exception as e:
@@ -102,7 +120,11 @@ async def execute_cascade(request: CascadeRequest):
 async def execute_gpt4o_endpoint(request: CascadeRequest):
     try:
         result = execute_gpt4o(
-            prompt=request.prompt
+            prompt=request.prompt,
+            conversation_history=request.conversation_history,
+            system_prompt=request.system_prompt,
+            few_shots=request.few_shots,
+            content = request.content
         )
         return {"status": "success", "result": result}
     except Exception as e:

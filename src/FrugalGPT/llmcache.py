@@ -220,15 +220,15 @@ class LLMCascade_cache(object):
         self.build_cascade(model_perf_train, scorers = scorers, budget=budget, cascade_depth=cascade_depth,metric=metric)
         return model_perf_test
     
-    def get_completion(self, query, genparams):
-        # Check cache first if enabled
+    def get_completion(self, query, genparams, system_prompt=None, content=None, few_shots=None):
+        # Vérifier le cache si activé
         if self.use_cache:
             cached_response, cached_model = self.cache.get_from_cache(query)
             if cached_response is not None:
-                self.cost = 0  # Cache hits cost nothing
+                self.cost = 0  # Un cache ne coûte rien
                 return cached_response, cached_model
 
-        # Original completion logic
+        # Initialiser les composants nécessaires
         LLMChain = self.LLMChain
         MyLLMEngine = self.MyLLMEngine
         cost = 0 
@@ -236,28 +236,57 @@ class LLMCascade_cache(object):
         prefix = self.prefix
         res = None
         model_used = None
-        
-        while(1):
+
+        # Construire le prompt complet
+        full_prompt = ""
+
+        # Ajouter le prompt système s'il est fourni
+        if system_prompt:
+            full_prompt += f"{system_prompt}\n\n"
+
+        # Ajouter les exemples *few-shot*
+        if few_shots:
+            for example in few_shots:
+                if example["role"] == "user":
+                    full_prompt += f"User: {example['content']}\n"
+                elif example["role"] == "assistant":
+                    full_prompt += f"Bot: {example['content']}\n"
+
+        # Ajouter l'historique de conversation
+        if content:
+            full_prompt += f"{content}\n\n"
+
+        # Ajouter la requête utilisateur
+        full_prompt += f"User: {query}\nBot:"
+
+        # Boucle de sélection du modèle
+        while True:
             service_name, score_thres = LLMChain.nextAPIandScore()
-            if(service_name==None):
+            if service_name is None:
                 break
+            
             logging.critical(f"Using service: {service_name}")
-            res = MyLLMEngine.get_completion(query=query,service_name=service_name,genparams=genparams)
+            res = MyLLMEngine.get_completion(query=full_prompt, service_name=service_name, genparams=genparams)
             cost += MyLLMEngine.get_cost()
-            t1 = query+" "+res
+            t1 = full_prompt + res
             t2 = t1.removeprefix(prefix)
             service_name = service_name.replace("/", "\\")
             score = self.MyScores[service_name].get_score(scorer_text(t2))
-            if(self.score_noise_injection==True):
-                score+=random.random()*self.eps
-            if(score>1-score_thres):
+
+            # Ajouter du bruit à la note si nécessaire
+            if self.score_noise_injection:
+                score += random.random() * self.eps
+
+            # Si la note est au-dessus du seuil, on valide ce modèle
+            if score > 1 - score_thres:
                 model_used = service_name
-                # Add successful response to cache
                 if self.use_cache:
                     self.cache.add_to_cache(query, res, model_used)
                 break
+
         self.cost = cost
         return res if res is not None else "", model_used
+
 
     def get_completion_batch(self, queries, genparams):
         result = list()
