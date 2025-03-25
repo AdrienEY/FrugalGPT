@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sys
 from dotenv import load_dotenv
+import tiktoken
+
 
 sys.path.insert(0, 'src/')
 import FrugalGPT
@@ -69,38 +71,53 @@ def execute_cascade_logic(prompt: str, content: str, system_prompt: str, few_sho
     except Exception as e:
         raise Exception(f"Erreur lors de l'exécution de la cascade : {str(e)}")
 
+def count_tokens(text: str, model: str = "gpt-4o-mini") -> int:
+    encoding = tiktoken.encoding_for_model(model)
+    return len(encoding.encode(text))
+
 def execute_gpt4o(prompt: str, content: str, system_prompt: str, few_shots: list):
     try:
-        # Initialize the GPT4o provider
-        provider = AzureGPT4oModelProvider("gpt-4o")
-        
-        # Set generation parameters
+        # Initialiser le fournisseur de modèle GPT-4o
+        provider = AzureGPT4oModelProvider("gpt-4o-mini")
+
+        # Définir les paramètres de génération
         genparams = GenerationParameter(
             max_tokens=200,
             temperature=0.1,
             stop=['\n']
         )
-        
-        # Incorporer l'historique de la conversation, le système et les few-shots dans la requête
 
-        
-        # Get completion from the model
-        result = provider._request_format(
+        # Calcul des tokens d'entrée
+        input_text = prompt + system_prompt + content + " ".join(map(str, few_shots))
+        input_tokens = count_tokens(input_text)
+
+        # Obtenir la complétion du modèle
+        completion = provider.getcompletiongpt4o(
             query=prompt,
             genparams=genparams,
-            system_prompt = system_prompt,
-            content = content,
-            few_shots = few_shots
+            content=content,
+            system_prompt=system_prompt,
+            few_shots=few_shots
         )
-        
+
+        # Calcul des tokens de sortie
+        output_tokens = count_tokens(completion)
+
+        COST_PER_INPUT_TOKENS = 0.0000025  
+        COST_PER_OUTPUT_TOKENS = 0.00001
+
+        # Calcul du coût total
+        cost = (input_tokens) * COST_PER_INPUT_TOKENS + (output_tokens) * COST_PER_OUTPUT_TOKENS
+
         return {
-            "answer": result["completion"],
-            "cost": provider._get_cost(prompt, result),
-            "model_used": "gpt-4o"
+            "answer": completion,
+            "cost": cost,  # Arrondi pour un affichage clair
+            "model_used": "gpt-4o-mini"
         }
-            
+
     except Exception as e:
-        raise Exception(f"Error executing GPT4o request: {str(e)}")
+        raise Exception(f"Error executing GPT-4o request: {str(e)}")
+
 
 @app.post("/execute_cascade")
 async def execute_cascade(request: CascadeRequest):
@@ -121,11 +138,11 @@ async def execute_gpt4o_endpoint(request: CascadeRequest):
     try:
         result = execute_gpt4o(
             prompt=request.prompt,
-            conversation_history=request.conversation_history,
             system_prompt=request.system_prompt,
             few_shots=request.few_shots,
-            content = request.content
+            content=request.content  # Vérifiez si ce paramètre est réellement utilisé
         )
         return {"status": "success", "result": result}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+

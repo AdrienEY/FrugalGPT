@@ -1040,6 +1040,50 @@ class AzureGPT4oModelProvider(APIModelProvider):
                 print(f"Failed to call API: {e}, retrying...")
                 time.sleep(retry_grace_time)
         raise TimeoutError(f"API request failed {retries} times, giving up!")
+    
+    def request_format(self, query, context, system_prompt, few_shots):
+        chat_prompt = []
+        if query :
+            chat_prompt.append({"role": "user", "content": query})
+
+        if system_prompt:
+            chat_prompt.append({
+                "role": "system",
+                "content": system_prompt
+            })
+        
+        for shot in few_shots:
+            chat_prompt.append({"role": "user", "content": shot["content"]})
+            chat_prompt.append({"role": "assistant", "content": shot["content"]})
+        
+        chat_prompt.append({"role": "user", "content": context})
+        return chat_prompt
+
+    def response_format(self, response):
+        return {
+            "raw": response,
+            "completion": response.choices[0].message.content
+        }
+
+    def getcompletiongpt4o(self, query, genparams, content, system_prompt="", few_shots=[]):
+        messages = self.request_format(query, content, system_prompt, few_shots)
+        
+        try:
+            response = self.client.chat.completions.create(
+                model=self._DEPLOYMENT_NAME,
+                messages=messages,
+                max_tokens=genparams.max_tokens,
+                temperature=genparams.temperature,
+                top_p=0.95,
+                frequency_penalty=0,
+                presence_penalty=0,
+                stop=genparams.stop,
+                stream=False
+            )
+            return self.response_format(response)["completion"]
+        except Exception as e:
+            print(f"Error during API call: {e}")
+            return None
 
 
 class AzureGPT4oMiniModelProvider(APIModelProvider):

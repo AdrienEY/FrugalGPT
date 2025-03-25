@@ -27,3 +27,4 @@ uvicorn[standard]
 matplotlib
 sentence-transformers
 faiss-cpu
+tiktoken
