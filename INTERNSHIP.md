@@ -1,123 +1,123 @@
-# Interaction entre Azure Production RAG et FrugalGPT
+# Interaction between Azure Production RAG and FrugalGPT
 
-Ce document décrit les interactions entre les projets `azure-production-rag` et `FrugalGPT`, ainsi que les modifications apportées pour permettre leur intégration. Il vise à fournir une vue d'ensemble claire et détaillée.
-
----
-
-## Contexte
-
-- **Azure Production RAG** : Ce projet implémente un système de génération de réponses augmentées par récupération (Retrieval-Augmented Generation, RAG) en production sur Azure. Il intègre des modèles de langage avancés et des pipelines de recherche documentaire.
-
-- **FrugalGPT** : Ce projet optimise les coûts d'utilisation des modèles de langage en combinant des stratégies d'efficacité computationnelle et des modèles légers. Il repose sur des techniques telles que l'adaptation des prompts, l'approximation des modèles LLM et les cascades de modèles.
-
-L'objectif principal de l'intégration est de tirer parti des optimisations de FrugalGPT pour réduire les coûts d'inférence dans le pipeline RAG d'Azure Production tout en maintenant une qualité de réponse élevée.
+This document describes the interactions between the `azure-production-rag` and `FrugalGPT` projects, as well as the changes made to enable their integration. It aims to provide a clear and detailed overview.
 
 ---
 
-## Architecture du projet
+## Context
+
+- **Azure Production RAG**: This project implements a Retrieval-Augmented Generation (RAG) system in production on Azure. It integrates advanced language models and document retrieval pipelines.
+
+- **FrugalGPT**: This project optimizes the cost of using language models by combining computational efficiency strategies and lightweight models. It relies on techniques such as prompt adaptation, LLM model approximation, and model cascades.
+
+The main goal of the integration is to leverage FrugalGPT's optimizations to reduce inference costs in Azure Production's RAG pipeline while maintaining high response quality.
+
+---
+
+## Project Architecture
 
 ![Architecture](./image/archi.png)
 
 ---
 
-## Modifications apportées
+## Changes Made
 
-### Dans `azure-production-rag`
+### In `azure-production-rag`
 
-1. **Intégration avec FrugalGPT** :
-   - Modification du fichier `chatreadretrieveread.py` (dans le dossier `approaches` du backend) pour appeler FrugalGPT. Ce fichier transmet les informations nécessaires pour générer une réponse et obtenir une estimation des coûts associés à la requête.
-   - Création du fichier `server_client.py`, appelé par `chatreadretrieveread.py`, pour gérer la communication avec FrugalGPT via le port 8000 en localhost. Ce fichier effectue :
-     - Un appel à la cascade de modèles.
-     - Une comparaison des coûts entre différents modèles.
-     - Une réponse HTTP 200 en cas de bon fonctionnement.
+1. **Integration with FrugalGPT**:
+   - Modified the `chatreadretrieveread.py` file (in the `approaches` folder of the backend) to call FrugalGPT. This file transmits the necessary information to generate a response and obtain a cost estimate for the query.
+   - Created the `server_client.py` file, called by `chatreadretrieveread.py`, to handle communication with FrugalGPT via port 8000 on localhost. This file performs:
+     - A call to the model cascade.
+     - A cost comparison between different models.
+     - An HTTP 200 response in case of successful operation.
 
-### Dans `FrugalGPT`
+### In `FrugalGPT`
 
-1. **Support des pipelines RAG** :
-   - Ajout de fonctionnalités spécifiques aux pipelines RAG, notamment :
-     - Le traitement des requêtes contextuelles pour garantir la cohérence des réponses.
-     - La gestion optimisée des documents récupérés pour les modèles légers.
+1. **Support for RAG Pipelines**:
+   - Added specific features for RAG pipelines, including:
+     - Processing contextual queries to ensure response consistency.
+     - Optimized management of retrieved documents for lightweight models.
 
-2. **API d'intégration** :
-   - Développement d'une API REST pour une interaction fluide avec Azure Production RAG. Cette API inclut :
-     - Des points de terminaison pour l'inférence optimisée des coûts.
-     - Des métriques en temps réel sur les coûts.
-     - Une gestion robuste des erreurs pour garantir la fiabilité.
+2. **Integration API**:
+   - Developed a REST API for seamless interaction with Azure Production RAG. This API includes:
+     - Endpoints for cost-optimized inference.
+     - Real-time cost metrics.
+     - Robust error handling to ensure reliability.
 
-3. **Stratégies d'efficacité computationnelle** :
-   - Implémentation de mécanismes de fallback : les modèles légers sont utilisés en priorité, et les modèles lourds ne sont appelés qu'en cas de besoin.
-   - Gestion dynamique des ressources pour ajuster les modèles en fonction des contraintes de coût et de latence.
-   - Mise en place d'une solution de cache dans le fichier `llmcache.py` pour réutiliser les réponses à des questions similaires. Cela évite des appels API inutiles.
-   - Utilisation de la librairie `sentence-transformers` avec le modèle `all-mpnet-base-v2` disponible sur Hugging Face : [lien](https://huggingface.co/sentence-transformers/all-mpnet-base-v2). Ce modèle peut être téléchargé localement ou appelé directement.
-
----
-
-## Points d'interaction
-
-1. **Pipeline d'inférence** :
-   - Azure Production RAG délègue certaines étapes d'inférence (génération de réponses, scoring, etc.) à FrugalGPT via l'API REST.
-   - FrugalGPT renvoie des résultats optimisés, intégrés ensuite dans le pipeline global.
-
-2. **Gestion des coûts** :
-   - FrugalGPT fournit des métriques détaillées, telles que :
-     - Le coût par requête.
-     - Les économies réalisées par rapport à l'utilisation exclusive de modèles lourds.
-   - Ces métriques permettent à Azure Production RAG d'ajuster dynamiquement ses stratégies d'exécution.
-
-3. **Partage de données** :
-   - Les deux projets partagent des données, notamment :
-     - Les documents récupérés pour garantir la cohérence des réponses.
-     - Les journaux d'utilisation pour affiner les modèles et les stratégies d'optimisation.
+3. **Computational Efficiency Strategies**:
+   - Implemented fallback mechanisms: lightweight models are prioritized, and heavy models are only called when necessary.
+   - Dynamic resource management to adjust models based on cost and latency constraints.
+   - Introduced a caching solution in the `llmcache.py` file to reuse responses to similar questions, avoiding unnecessary API calls.
+   - Used the `sentence-transformers` library with the `all-mpnet-base-v2` model available on Hugging Face: [link](https://huggingface.co/sentence-transformers/all-mpnet-base-v2). This model can be downloaded locally or called directly.
 
 ---
 
-## Instructions pour les développeurs
+## Interaction Points
 
-### Configuration dans `azure-production-rag`
+1. **Inference Pipeline**:
+   - Azure Production RAG delegates certain inference steps (response generation, scoring, etc.) to FrugalGPT via the REST API.
+   - FrugalGPT returns optimized results, which are then integrated into the global pipeline.
 
-1. Configurez votre environnement Azure avec votre abonnement et les services nécessaires.
-2. Lancez le backend et le frontend avec la commande :
+2. **Cost Management**:
+   - FrugalGPT provides detailed metrics, such as:
+     - Cost per query.
+     - Savings achieved compared to exclusive use of heavy models.
+   - These metrics allow Azure Production RAG to dynamically adjust its execution strategies.
+
+3. **Data Sharing**:
+   - Both projects share data, including:
+     - Retrieved documents to ensure response consistency.
+     - Usage logs to refine models and optimization strategies.
+
+---
+
+## Developer Instructions
+
+### Configuration in `azure-production-rag`
+
+1. Configure your Azure environment with your subscription and required services.
+2. Start the backend and frontend with the command:
    ```bash
    ./start.ps1
    ```
-3. Vérifiez que le fichier `server_client.py` (dans le dossier `core` du backend) contient les paramètres nécessaires pour établir la connexion avec FrugalGPT.
+3. Ensure that the `server_client.py` file (in the `core` folder of the backend) contains the necessary parameters to establish the connection with FrugalGPT.
 
-### Configuration dans `FrugalGPT`
+### Configuration in `FrugalGPT`
 
-1. Téléchargez la base de données requise avec la commande :
+1. Download the required database with the command:
    ```bash
    wget -P db/ https://github.com/lchen001/DataHolder/releases/download/v0.0.1/HEADLINES.sqlite
    ```
-2. Installez les dépendances nécessaires :
+2. Install the required dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-3. Créez un fichier `.env` contenant les points de terminaison et les clés API nécessaires.
+3. Create a `.env` file containing the necessary endpoints and API keys.
 
-### Exécution de `FrugalGPT`
+### Running `FrugalGPT`
 
-1. Testez les modèles LLM et configurez la stratégie de cascade avec :
+1. Test the LLM models and configure the cascade strategy with:
    ```bash
    python approachfrugalgpt.py
    ```
-2. Démarrez le serveur pour activer l'API REST :
+2. Start the server to enable the REST API:
    ```bash
    uvicorn main:app --reload
    ```
-3. Vous pouvez exécuter les deux commandes successives avec :
+3. You can run both commands sequentially with:
    ```bash
    ./run_scripts.ps1
    ```
 
-### Exécution conjointe de `FrugalGPT` et `azure-production-rag`
+### Running `FrugalGPT` and `azure-production-rag` Together
 
-1. Lancez les commandes respectives :
-   - Pour FrugalGPT : `uvicorn main:app --reload`
-   - Pour Azure Production RAG : `./start.ps1`
-2. Une fois les deux projets démarrés, l'interaction entre les deux repositories permet de répondre aux questions posées via l'interface frontend du Legal Copilot.
+1. Launch the respective commands:
+   - For FrugalGPT: `uvicorn main:app --reload`
+   - For Azure Production RAG: `./start.ps1`
+2. Once both projects are running, the interaction between the two repositories allows answering questions posed via the Legal Copilot frontend interface.
 
 ---
 
 ## Conclusion
 
-Cette intégration combine la puissance des pipelines RAG d'Azure Production avec les optimisations avancées de FrugalGPT, offrant un système performant, économique et adaptable. Pour toute question ou problème, consultez les fichiers `CONTRIBUTING.md` et `CHANGELOG.md` dans les deux projets. N'hésitez pas à soumettre des suggestions ou des rapports de bogues via les dépôts GitHub respectifs.
+This integration combines the power of Azure Production's RAG pipelines with FrugalGPT's advanced optimizations, offering a performant, cost-effective, and adaptable system. For any questions or issues, refer to the `CONTRIBUTING.md` and `CHANGELOG.md` files in both projects. Feel free to submit suggestions or bug reports via the respective GitHub repositories.
