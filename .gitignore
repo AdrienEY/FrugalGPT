@@ -167,4 +167,4 @@ db/HEADLINES.sqlite
 *.pth
 *.bin
 *.json
-*.png
+cost_comparison.png

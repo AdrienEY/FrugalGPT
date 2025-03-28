@@ -14,7 +14,7 @@ L'objectif principal de l'intégration est de tirer parti des optimisations de F
 
 ---
 
-![Env](../image/archi.png)
+![Env](./image/archi.png)
 
 ## Modifications apportées
 
