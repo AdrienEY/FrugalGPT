@@ -12,19 +12,21 @@ import logging
 import os
 from datetime import datetime
 
+# Add the src directory to the Python path
 sys.path.insert(0, 'src/')
 import FrugalGPT
 import service
 from service.modelservice import AzureGPT4oModelProvider, GenerationParameter
 
-# Configure logging
+# Configure logging to display information-level logs
 logging.basicConfig(level=logging.INFO)
 
+# Initialize the FastAPI application
 app = FastAPI()
 
-# uvicorn main:app --reload
+# Command to run the application: uvicorn main:app --reload
 
-# Configure CORS
+# Configure CORS to allow all origins, methods, and headers
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -33,26 +35,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Define the request model for cascade-related endpoints
 class CascadeRequest(BaseModel):
     prompt: str
-    conversation_history: list = []  # Ajout de l'historique de la conversation si nécessaire
-    system_prompt: str = ""  # Ajout du prompt système si nécessaire
-    few_shots: list = []  # Ajout des exemples de few-shots si nécessaire
+    conversation_history: list = []  # Optional conversation history
+    system_prompt: str = ""  # Optional system prompt
+    few_shots: list = []  # Optional few-shot examples
     content: str
 
-# Charger les variables d'environnement
+# Load environment variables from a .env file
 load_dotenv()
 
+# Function to execute the cascade logic
 def execute_cascade_logic(prompt: str, content: str, system_prompt: str, few_shots: list):
     logging.info("Starting cascade logic execution")
     MyCascade = FrugalGPT.LLMCascade_cache()
     strategy_path = 'strategy/cascade_strategy.json'
     
     try:
+        # Define the budget for the cascade
         budget = 0.0005733333333333334
         logging.info(f"Loading cascade strategy from: {strategy_path} with budget: {budget}")
         MyCascade.load(loadpath=strategy_path, budget=budget)
         
+        # Define generation parameters
         genparams = FrugalGPT.GenerationParameter(
             max_tokens=200,
             temperature=0.1,
@@ -60,6 +66,7 @@ def execute_cascade_logic(prompt: str, content: str, system_prompt: str, few_sho
         )
         logging.info(f"Generation parameters: {genparams}")
 
+        # Get the completion from the cascade
         answer, model_used = MyCascade.get_completion(
             query=prompt,
             genparams=genparams,
@@ -69,6 +76,7 @@ def execute_cascade_logic(prompt: str, content: str, system_prompt: str, few_sho
         )
         logging.info(f"Cascade answer: {answer}, Model used: {model_used}")
 
+        # Calculate the cost of the cascade
         cost = MyCascade.get_cost()
         logging.info(f"Cascade cost: {cost}")
 
@@ -79,29 +87,31 @@ def execute_cascade_logic(prompt: str, content: str, system_prompt: str, few_sho
         }
     except Exception as e:
         logging.error(f"Error in cascade logic: {str(e)}")
-        raise Exception(f"Erreur lors de l'exécution de la cascade : {str(e)}")
+        raise Exception(f"Error during cascade execution: {str(e)}")
 
+# Function to count the number of tokens in a text for a specific model
 def count_tokens(text: str, model: str = "gpt-4o-mini") -> int:
     encoding = tiktoken.encoding_for_model(model)
     return len(encoding.encode(text))
 
+# Function to execute GPT-4o logic
 def execute_gpt4o(prompt: str, content: str, system_prompt: str, few_shots: list):
     try:
-        # Initialiser le fournisseur de modèle GPT-4o
+        # Initialize the GPT-4o model provider
         provider = AzureGPT4oModelProvider("gpt-4o-mini")
 
-        # Définir les paramètres de génération
+        # Define generation parameters
         genparams = GenerationParameter(
             max_tokens=200,
             temperature=0.1,
             stop=['\n']
         )
 
-        # Calcul des tokens d'entrée
+        # Calculate input tokens
         input_text = prompt + system_prompt + content + " ".join(map(str, few_shots))
         input_tokens = count_tokens(input_text)
 
-        # Obtenir la complétion du modèle
+        # Get the model completion
         completion = provider.getcompletiongpt4o(
             query=prompt,
             genparams=genparams,
@@ -110,39 +120,40 @@ def execute_gpt4o(prompt: str, content: str, system_prompt: str, few_shots: list
             few_shots=few_shots
         )
 
-        # Calcul des tokens de sortie
+        # Calculate output tokens
         output_tokens = count_tokens(completion)
 
+        # Define token costs
         COST_PER_INPUT_TOKENS = 0.0000025  
         COST_PER_OUTPUT_TOKENS = 0.00001
 
-        # Calcul du coût total
+        # Calculate the total cost
         cost = (input_tokens) * COST_PER_INPUT_TOKENS + (output_tokens) * COST_PER_OUTPUT_TOKENS
 
         return {
             "answer": completion,
-            "cost": cost,  # Arrondi pour un affichage clair
+            "cost": cost,
             "model_used": "gpt-4o-mini"
         }
 
     except Exception as e:
         raise Exception(f"Error executing GPT-4o request: {str(e)}")
 
-
+# Endpoint to execute cascade logic
 @app.post("/execute_cascade")
 async def execute_cascade(request: CascadeRequest):
     try:
         result = execute_cascade_logic(
             prompt=request.prompt,
             system_prompt=request.system_prompt,
-            content = request.content,
+            content=request.content,
             few_shots=request.few_shots
-            #conversation_history=request.conversation_history
         )
         return {"status": "success", "result": result}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+# Endpoint to execute GPT-4o logic
 @app.post("/execute_gpt4o")
 async def execute_gpt4o_endpoint(request: CascadeRequest):
     try:
@@ -150,12 +161,13 @@ async def execute_gpt4o_endpoint(request: CascadeRequest):
             prompt=request.prompt,
             system_prompt=request.system_prompt,
             few_shots=request.few_shots,
-            content=request.content  # Vérifiez si ce paramètre est réellement utilisé
+            content=request.content
         )
         return {"status": "success", "result": result}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+# Endpoint to compare costs between cascade and GPT-4o
 @app.post("/compare_costs")
 async def compare_costs(request: CascadeRequest):
     try:

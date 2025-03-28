@@ -142,13 +142,11 @@ class LLMCascade(object):
             res = MyLLMEngine.get_completion(query=query,service_name=service_name,genparams=genparams)
             cost += MyLLMEngine.get_cost()
             t1 = query+" "+res
-            #print(t1)
             t2 = t1.removeprefix(prefix)
             service_name = service_name.replace("/", "\\")
             score = self.MyScores[service_name].get_score(scorer_text(t2))
             if(self.score_noise_injection==True):
                 score+=random.random()*self.eps
-            #if score > score_thres:
             if(score>1-score_thres):
                 #print("score and score thres:",service_name,score, (1-score_thres))
                 model_used = service_name  # Set the model used

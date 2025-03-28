@@ -1,6 +1,7 @@
 import sys
 sys.path.insert(0, 'src/')
 
+# Import necessary modules and classes
 from .llmvanilla import LLMVanilla
 from service.modelservice import GenerationParameter
 import pandas
@@ -16,26 +17,29 @@ from sentence_transformers import SentenceTransformer
 import faiss
 import numpy as np
 
-
+# Function to preprocess text for scoring
 def scorer_text(text):
-    #return text
-
+    # Extracts the question part of the text for scoring purposes
     newtext = "Q:"+text.split("Q:")[-1]    
     return newtext
 
-def tempsave(label, response, score,name):
+# Placeholder function for temporary saving (currently does nothing)
+def tempsave(label, response, score, name):
     return
 
+# Class to manage caching of LLM responses and embeddings
 class LLMCache:
     def __init__(self, cache_file="cache/query_cache.json", similarity_threshold=0.85, index_file="cache/faiss_index.index"):
+        # Initialize cache and FAISS index for efficient similarity search
         self.similarity_threshold = similarity_threshold
         self.cache_file = Path(cache_file)
         self.index_file = Path(index_file)
         
+        # Load the SentenceTransformer model for embedding generation
         path = str(Path(__file__).parent.parent.parent.parent / "all-mpnet-base-v2")
         self.model = SentenceTransformer(path)
 
-        # Charger le cache existant si disponible
+        # Load existing cache if available
         if self.cache_file.exists():
             with open(self.cache_file, 'r') as f:
                 try:
@@ -45,98 +49,94 @@ class LLMCache:
         else:
             self.cache = []
 
-        # Charger ou créer l'index FAISS
+        # Load or initialize FAISS index
         if self.index_file.exists():
             self.index = faiss.read_index(str(self.index_file))
         else:
             self.index = None
 
+    # Save the cache and FAISS index to disk
     def save_cache(self):
         with open(self.cache_file, 'w') as f:
             json.dump(self.cache, f, indent=4)
         
-        # Sauvegarder l'index FAISS
         if self.index is not None:
             faiss.write_index(self.index, str(self.index_file))
 
+    # Add a query and its response to the cache
     def add_to_cache(self, query, response, model_used):
         query_embedding = self.model.encode([query])[0]
 
-        # Ajouter au cache JSON
+        # Add to JSON cache
         entry = {
             "query": query,
             "embedding": query_embedding.tolist(),
             "response": response,
             "model": model_used
         }
-
         self.cache.append(entry)
 
-        # Ajouter à l'index FAISS
+        # Add to FAISS index
         if self.index is None:
-            # Si l'index FAISS n'existe pas, créez-le
-            self.index = faiss.IndexFlatL2(len(query_embedding))  # Utiliser L2 distance (Euclidienne)
-        
-        # Ajouter l'embedding à l'index FAISS
+            self.index = faiss.IndexFlatL2(len(query_embedding))  # Initialize FAISS index
         self.index.add(np.array([query_embedding], dtype=np.float32))
 
-        # Sauvegarder le cache et l'index
+        # Save updated cache and index
         self.save_cache()
 
+    # Retrieve a response from the cache based on query similarity
     def get_from_cache(self, query):
         if not self.cache:
             return None, None
 
         query_embedding = self.model.encode([query])[0]
 
-        # Utiliser FAISS pour trouver les indices similaires
+        # Use FAISS for similarity search
         if self.index is not None:
             query_embedding_np = np.array([query_embedding], dtype=np.float32)
-            distances, indices = self.index.search(query_embedding_np, k=1)  # Trouver le plus proche
-            if distances[0][0] < (1 - self.similarity_threshold) ** 2:  # Comparer à un seuil de similarité
+            distances, indices = self.index.search(query_embedding_np, k=1)
+            if distances[0][0] < (1 - self.similarity_threshold) ** 2:
                 return self.cache[indices[0][0]]["response"], self.cache[indices[0][0]]["model"]
         
-        # Si FAISS n'a rien trouvé de proche, faire une recherche manuelle (comme dans l'ancienne version)
+        # Fallback to manual similarity search
         for entry in self.cache:
             cached_embedding = np.array(entry["embedding"], dtype=np.float32)
             similarity = np.dot(query_embedding, cached_embedding) / (np.linalg.norm(query_embedding) * np.linalg.norm(cached_embedding))
-            
             if similarity >= self.similarity_threshold:
                 return entry["response"], entry["model"]
 
         return None, None
 
-
+# Class to manage cascading LLM calls with caching and scoring
 class LLMCascade_cache(object):
     def __init__(self, 
-                 #service_names =['openaichat/gpt-3.5-turbo','openaichat/gpt-4'],
                  metric="em",
                  db_path= Path(__file__).parent.parent.parent / "db" / "AGNEWS.sqlite",
                  score_noise_injection=False,
-                 batch_build = False,
+                 batch_build=False,
                  prefix="",
                  use_cache=True,
-                 cache_similarity_threshold=0.85
-                 ):
-        # Initialization code for the FrugalGPT class
+                 cache_similarity_threshold=0.85):
+        # Initialize components for cascading LLM calls
         self.MyLLMEngine = LLMVanilla(db_path=db_path)    
         self.MyScores = dict()
         self.LLMChain = LLMChain(metric=metric)
-        #self.service_names =['openaichat/gpt-3.5-turbo','openaichat/gpt-4'],
-        self.eps=1e-8
+        self.eps = 1e-8
         self.score_noise_injection = score_noise_injection
         self.batch_build = batch_build
         self.prefix = prefix
         self.use_cache = use_cache
-        cache_file = "cache/query_cache.json"
+
+        # Initialize cache if enabled
         if use_cache:
             self.cache = LLMCache(
-                cache_file,
+                "cache/query_cache.json",
                 cache_similarity_threshold
             )
         return 
 
-    def load(self,loadpath="strategy/HEADLINES/",budget=0.01):
+    # Load strategy and scorers from disk
+    def load(self, loadpath="strategy/HEADLINES/", budget=0.01):
         self.LLMChain = LLMChain()
         self.LLMChain.setbudget(budget=budget)
         self.LLMChain.loadstrategy(Path(__file__).parent.parent.parent  / "strategy" / "AGNEWS_Model20252602" / "cascade_strategy.json")        
@@ -172,7 +172,7 @@ class LLMCascade_cache(object):
       keys = directories
       return keys  # Return the directories list if needed
 
-
+    # Save strategy and scorers to disk
     def save(self, savepath="strategy/HEADLINES/"):
         # Save both Scores and LLChains to the disk
         if not os.path.exists(savepath):
@@ -186,6 +186,7 @@ class LLMCascade_cache(object):
             self.MyScores[name].save(path1)
         return
     
+    # Train the cascade with given training data
     def train(self,
               trainingdata=None,
               budget=0.1,
@@ -220,6 +221,7 @@ class LLMCascade_cache(object):
         self.build_cascade(model_perf_train, scorers = scorers, budget=budget, cascade_depth=cascade_depth,metric=metric)
         return model_perf_test
     
+    # Get a single completion result, using cache if enabled
     def get_completion(self, query, genparams, system_prompt=None, content=None, few_shots=None):
         # Vérifier le cache si activé
         if self.use_cache:
@@ -287,7 +289,7 @@ class LLMCascade_cache(object):
         self.cost = cost
         return res if res is not None else "", model_used
 
-
+    # Get batch completion results
     def get_completion_batch(self, queries, genparams):
         result = list()
         for query in queries:
@@ -321,6 +323,7 @@ class LLMCascade_cache(object):
             result.append(temp)
         return result
  
+    # Build scorers for the cascade
     def  build_scorers(self,model_perf_train):
         self.scorer = dict()
         for name in model_perf_train:
@@ -337,9 +340,6 @@ class LLMCascade_cache(object):
         prefix = self.prefix
         #traintext = list((res_and_eval['query'] + res_and_eval['answer']).apply(lambda x: scorer_text(x).removeprefix(prefix)))
         traintext = list((res_and_eval['query'] +" "+ res_and_eval['answer']).apply(lambda x: scorer_text(x.removeprefix(prefix))))
-
-
-
         trainlabel = list(res_and_eval['quality'])
         MyScore = Score(score_type=self.score_type, test_size=self.score_test_size)
         model = MyScore.train(traintext,trainlabel)
@@ -360,6 +360,7 @@ class LLMCascade_cache(object):
             scores_dict[ptr['_id']] = score1
         return scores_dict
 
+    # Evaluate all services on a dataset
     def evaluateall(self,train,service_names,metric,genparams):
         api_responses = dict()
         for name in service_names:
@@ -378,6 +379,7 @@ class LLMCascade_cache(object):
         result = pandas.DataFrame(response)
         return result
     
+    # Build the cascade strategy
     def build_cascade(self,model_perf_test, scorers, budget, cascade_depth,metric):
         LLMChain1 = LLMChain(metric=metric,L_max=cascade_depth)
         LLMChain1.setbudget(budget=budget)
@@ -412,6 +414,7 @@ class LLMCascade_cache(object):
         self.LLMChain = LLMChain1
         return
     
+# Utility function to convert a DataFrame to a specific dictionary format
 def table2json(df):
     # Convert DataFrame to the desired dictionary format
     result_dict = {}
@@ -440,6 +443,7 @@ def table2json(df):
     result_dict['logprobs'] = dict()
     return result_dict
 
+# Placeholder class for strategy (currently does nothing)
 class strategy():
     def __init__(self):
         return
