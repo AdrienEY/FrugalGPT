@@ -156,15 +156,12 @@ static/
 data/**/*.md5
 
 # Add by AdrienEY
-AGNEWS.sqlite
-HEADLINES.sqlite
 *.sqlite
-db/AGNEWS.sqlite
-db/HEADLINES.sqlite
+db/*.sqlite
 *.csv
 *.safetensors
 *.pt
 *.pth
 *.bin
 *.json
-cost_comparison.png
+plots/*.png
