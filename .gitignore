@@ -167,3 +167,4 @@ db/HEADLINES.sqlite
 *.pth
 *.bin
 *.json
+*.png

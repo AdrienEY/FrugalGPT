@@ -360,7 +360,7 @@ display(full_pd)
 
 ############### graph ##################
 
-"""
+
 # Import matplotlib
 import matplotlib.pyplot as plt
 
@@ -373,12 +373,12 @@ frugal_data = full_pd[full_pd['Method'] == 'FrugalGPT'].sort_values('Budget')
 # First two points with Test_cost
 first_two = frugal_data.iloc[:2]
 plt.scatter(first_two['Test_cost'], first_two['Test_acc'], 
-           label='FrugalGPT (Test_cost)', color='blue', s=100)
+           label='FrugalGPT', color='blue', s=100)
 
 # Remaining points with Budget
 remaining = frugal_data.iloc[2:]
 plt.scatter(remaining['Budget'], remaining['Test_acc'], 
-           label='FrugalGPT (Budget)', color='blue', s=100)
+           label='', color='blue', s=100)
 
 # Add connecting lines for FrugalGPT points
 x_values = list(first_two['Test_cost']) + list(remaining['Budget'])
@@ -404,5 +404,3 @@ plt.tight_layout()
 
 # Show the plot
 plt.show()
-
-"""
