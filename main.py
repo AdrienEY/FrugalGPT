@@ -42,12 +42,13 @@ class CascadeRequest(BaseModel):
     system_prompt: str = ""  # Optional system prompt
     few_shots: list = []  # Optional few-shot examples
     content: str
+    query_prompt_template: str = ""  # Add query_prompt_template field
 
 # Load environment variables from a .env file
 load_dotenv()
 
 # Function to execute the cascade logic
-def execute_cascade_logic(prompt: str, content: str, system_prompt: str, few_shots: list):
+def execute_cascade_logic(prompt: str, content: str, system_prompt: str, few_shots: list, query_prompt_template: str):
     logging.info("Starting cascade logic execution")
     MyCascade = FrugalGPT.LLMCascade_cache()
     strategy_path = 'strategy/cascade_strategy.json'
@@ -72,7 +73,8 @@ def execute_cascade_logic(prompt: str, content: str, system_prompt: str, few_sho
             genparams=genparams,
             system_prompt=system_prompt,
             content=content,
-            few_shots=few_shots
+            few_shots=few_shots,
+            query_prompt_template=query_prompt_template  # Pass query_prompt_template
         )
         logging.info(f"Cascade answer: {answer}, Model used: {model_used}")
 
@@ -147,7 +149,8 @@ async def execute_cascade(request: CascadeRequest):
             prompt=request.prompt,
             system_prompt=request.system_prompt,
             content=request.content,
-            few_shots=request.few_shots
+            few_shots=request.few_shots,
+            query_prompt_template=request.query_prompt_template  # Pass query_prompt_template
         )
         return {"status": "success", "result": result}
     except Exception as e:
@@ -179,7 +182,8 @@ async def compare_costs(request: CascadeRequest):
             prompt=request.prompt,
             system_prompt=request.system_prompt,
             content=request.content,
-            few_shots=request.few_shots
+            few_shots=request.few_shots,
+            query_prompt_template=request.query_prompt_template
         )
         cascade_cost = cascade_result["cost"]
         logging.info(f"Cascade cost calculated: {cascade_cost}")

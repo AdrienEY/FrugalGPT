@@ -222,7 +222,7 @@ class LLMCascade_cache(object):
         return model_perf_test
     
     # Get a single completion result, using cache if enabled
-    def get_completion(self, query, genparams, system_prompt=None, content=None, few_shots=None):
+    def get_completion(self, query, genparams, system_prompt=None, content=None, few_shots=None, query_prompt_template=None):
         # Vérifier le cache si activé
         if self.use_cache:
             cached_response, cached_model = self.cache.get_from_cache(query)
@@ -240,7 +240,7 @@ class LLMCascade_cache(object):
         model_used = None
 
         # Construire le prompt complet
-        full_prompt = ""
+        full_prompt = query_prompt_template or ""  # Use query_prompt_template if provided
 
         # Ajouter le prompt système s'il est fourni
         if system_prompt:
