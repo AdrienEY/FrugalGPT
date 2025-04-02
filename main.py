@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 import logging
 import os
 from datetime import datetime
+import time  # Import the time module for latency measurement
 
 # Add the src directory to the Python path
 sys.path.insert(0, 'src/')
@@ -54,6 +55,9 @@ def execute_cascade_logic(prompt: str, content: str, system_prompt: str, few_sho
     strategy_path = 'strategy/cascade_strategy.json'
     
     try:
+        # Measure start time
+        start_time = time.time()
+
         # Define the budget for the cascade
         budget = 0.0005733333333333334
         logging.info(f"Loading cascade strategy from: {strategy_path} with budget: {budget}")
@@ -82,10 +86,16 @@ def execute_cascade_logic(prompt: str, content: str, system_prompt: str, few_sho
         cost = MyCascade.get_cost()
         logging.info(f"Cascade cost: {cost}")
 
+        # Measure end time and calculate latency
+        end_time = time.time()
+        latency = end_time - start_time
+        logging.info(f"Cascade latency: {latency:.6f} seconds")
+
         return {
             "answer": answer,
             "cost": cost,
-            "model_used": model_used
+            "model_used": model_used,
+            "latency": latency  # Include latency in the response
         }
     except Exception as e:
         logging.error(f"Error in cascade logic: {str(e)}")
@@ -99,6 +109,9 @@ def count_tokens(text: str, model: str = "gpt-4o-mini") -> int:
 # Function to execute GPT-4o logic
 def execute_gpt4o(prompt: str, content: str, system_prompt: str, few_shots: list):
     try:
+        # Measure start time
+        start_time = time.time()
+
         # Initialize the GPT-4o model provider
         provider = AzureGPT4oModelProvider("gpt-4o-mini")
 
@@ -132,10 +145,16 @@ def execute_gpt4o(prompt: str, content: str, system_prompt: str, few_shots: list
         # Calculate the total cost
         cost = (input_tokens) * COST_PER_INPUT_TOKENS + (output_tokens) * COST_PER_OUTPUT_TOKENS
 
+        # Measure end time and calculate latency
+        end_time = time.time()
+        latency = end_time - start_time
+        logging.info(f"GPT-4o latency: {latency:.6f} seconds")
+
         return {
             "answer": completion,
             "cost": cost,
-            "model_used": "gpt-4o-mini"
+            "model_used": "gpt-4o-mini",
+            "latency": latency  # Include latency in the response
         }
 
     except Exception as e:
@@ -186,7 +205,8 @@ async def compare_costs(request: CascadeRequest):
             query_prompt_template=request.query_prompt_template
         )
         cascade_cost = cascade_result["cost"]
-        logging.info(f"Cascade cost calculated: {cascade_cost}")
+        cascade_latency = cascade_result["latency"]
+        logging.info(f"Cascade cost calculated: {cascade_cost}, Latency: {cascade_latency:.6f} seconds")
 
         # Execute GPT-4o logic
         gpt4o_result = execute_gpt4o(
@@ -196,27 +216,34 @@ async def compare_costs(request: CascadeRequest):
             few_shots=request.few_shots
         )
         gpt4o_cost = gpt4o_result["cost"]
-        logging.info(f"GPT-4o cost calculated: {gpt4o_cost}")
+        gpt4o_latency = gpt4o_result["latency"]
+        logging.info(f"GPT-4o cost calculated: {gpt4o_cost}, Latency: {gpt4o_latency:.6f} seconds")
 
         # Create the comparison graph
         labels = ['Cascade', 'GPT-4o']
         costs = [cascade_cost, gpt4o_cost]
+        latencies = [cascade_latency, gpt4o_latency]
 
-        plt.figure(figsize=(6, 4))
+        plt.figure(figsize=(8, 6))
+
+        # Plot cost comparison
+        plt.subplot(2, 1, 1)
         bars = plt.bar(labels, costs, color=['blue', 'orange'])
         plt.title('Cost Comparison')
         plt.ylabel('Cost (USD)')
+        plt.tight_layout()
+        for bar, cost in zip(bars, costs):
+            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f"${cost:.6f}", ha='center', va='bottom')
+
+        # Plot latency comparison
+        plt.subplot(2, 1, 2)
+        bars = plt.bar(labels, latencies, color=['blue', 'orange'])
+        plt.title('Latency Comparison')
+        plt.ylabel('Latency (seconds)')
         plt.xlabel('Model')
         plt.tight_layout()
-
-        # Annotate the bars with the cost values
-        for bar, cost in zip(bars, costs):
-            plt.text(
-                bar.get_x() + bar.get_width() / 2,  # X position
-                bar.get_height(),  # Y position
-                f"${cost:.6f}",  # Text to display
-                ha='center', va='bottom'  # Center alignment
-            )
+        for bar, latency in zip(bars, latencies):
+            plt.text(bar.get_x() + bar.get_width() / 2, bar.get_height(), f"{latency:.6f}s", ha='center', va='bottom')
 
         # Ensure the 'plots' directory exists
         plots_dir = os.path.join(os.getcwd(), "plots")
@@ -224,7 +251,7 @@ async def compare_costs(request: CascadeRequest):
 
         # Generate a unique filename based on the current timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        plot_path = os.path.join(plots_dir, f"cost_comparison_{timestamp}.png")
+        plot_path = os.path.join(plots_dir, f"cost_latency_comparison_{timestamp}.png")
 
         # Save the graph to the file
         plt.savefig(plot_path)
@@ -245,7 +272,9 @@ async def compare_costs(request: CascadeRequest):
             "graph": graph_base64,
             "details": {
                 "cascade_cost": cascade_cost,
+                "cascade_latency": cascade_latency,
                 "gpt4o_cost": gpt4o_cost,
+                "gpt4o_latency": gpt4o_latency,
                 "graph_path": plot_path  # Include the file path in the response
             }
         })
